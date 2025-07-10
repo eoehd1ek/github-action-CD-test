@@ -81,17 +81,17 @@ jobs:
       run: |
         echo "--- Debugging Info for File Transfer ---"
         echo "Source Path on Runner: ${{ steps.get_jar_name.outputs.JAR_FILE_PATH }}"
-        echo "Root Source Path on Runner: ${{ steps.get_jar_name.outputs.JAR_FILE_NAME }}"
+        echo "Root Source Path on Runner: ./${{ steps.get_jar_name.outputs.JAR_FILE_NAME }}"
         echo "Target Directory on Server: /home/${{ secrets.SSH_USERNAME }}/${{ github.event.repository.name }}/backend"
         echo "--- Checking if source file exists on Runner ---"
         ls -la ${{ steps.get_jar_name.outputs.JAR_FILE_PATH }}
-        ls -la ${{ steps.get_jar_name.outputs.JAR_FILE_NAME }}
+        ls -la ./${{ steps.get_jar_name.outputs.JAR_FILE_NAME }}
 
     # 전송 경로 문제를 해결하기 위해 프로젝트 루트로 JAR 파일 복사
     # scp source에  ${{ steps.get_jar_name.outputs.JAR_FILE_PATH }} 사용시
     # /home/***/github-action-CD-test/backend/backend/build/libs/demo-0.0.1-SNAPSHOT.jar 모습으로 전송됨
     - name: Prepare file for transfer
-      run: cp ${{ steps.get_jar_name.outputs.JAR_FILE_PATH }} ${{ steps.get_jar_name.outputs.JAR_FILE_NAME }}
+      run: cp ${{ steps.get_jar_name.outputs.JAR_FILE_PATH }} ./${{ steps.get_jar_name.outputs.JAR_FILE_NAME }}
 
     # 러너에서 빌드된 Jar 파일 우분투로 이동
     - name: Transfer JAR file to Ubuntu Server
@@ -102,7 +102,7 @@ jobs:
         username: ${{ secrets.SSH_USERNAME }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         passphrase: ${{ secrets.SSH_PASSPHRASE }}
-        source: ${{ steps.get_jar_name.outputs.JAR_FILE_NAME }} # GitHub Actions runner의 JAR 파일 경로
+        source: ./${{ steps.get_jar_name.outputs.JAR_FILE_NAME }} # GitHub Actions runner의 JAR 파일 경로
         target: /home/${{ secrets.SSH_USERNAME }}/${{ github.event.repository.name }}/backend # Ubuntu 서버의 대상 디렉토리
 
     # 우분투에서 jar 파일 실행
