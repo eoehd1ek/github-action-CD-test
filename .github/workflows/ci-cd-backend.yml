@@ -98,7 +98,7 @@ jobs:
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         passphrase: ${{ secrets.SSH_PASSPHRASE }}
         source: ${{ steps.get_jar_name.outputs.JAR_FILE_PATH }} # GitHub Actions runner의 JAR 파일 경로
-        target: /home/${{ secrets.SSH_USERNAME }}/${{ github.event.repository.name }}/backend # Ubuntu 서버의 대상 디렉토리
+        target: /home/${{ secrets.SSH_USERNAME }}/${{ github.event.repository.name }}/backend/ # Ubuntu 서버의 대상 디렉토리
 
     # 우분투에서 jar 파일 실행
     - name: Run Spring Boot Application
