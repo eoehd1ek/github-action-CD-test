@@ -8,6 +8,6 @@ public class MainController {
 
     @GetMapping
     public String index() {
-        return "Hello World ver 6";
+        return "Hello World ver 7";
     }
 }
