@@ -105,8 +105,21 @@ jobs:
         script: |
           REMOTE_APP_DIR="/home/${{ secrets.SSH_USERNAME }}/${{ github.event.repository.name }}/backend"
           JAR_FILE_NAME="${{ steps.get_jar_name.outputs.JAR_FILE_NAME }}"
+          JAR_PATH="${REMOTE_APP_DIR}/${JAR_FILE_NAME}"
+
+          echo "--- Starting Deployment ---"
+          echo "Remote App Directory: ${REMOTE_APP_DIR}"
+          echo "JAR File Name: ${JAR_FILE_NAME}"
+          echo "Attempting to run JAR at: ${JAR_PATH}"
           
-          # nohup으로 백그라운드 실행
-          echo "Starting new application: ${JAR_FILE_NAME}"
-          nohup java -jar "${REMOTE_APP_DIR}/${JAR_FILE_NAME}" > "${REMOTE_APP_DIR}/application.log" 2>&1 &
-          echo "Application started."
+          echo "Listing contents of the deployment directory..."
+          ls -la "${REMOTE_APP_DIR}"
+          
+          if [ -f "${JAR_PATH}" ]; then
+            echo "JAR file found. Starting application..."
+            nohup java -jar "${JAR_PATH}" > "${REMOTE_APP_DIR}/application.log" 2>&1 &
+            echo "Application start command issued."
+          else
+            echo "ERROR: JAR file not found at the expected path!"
+            exit 1
+          fi
