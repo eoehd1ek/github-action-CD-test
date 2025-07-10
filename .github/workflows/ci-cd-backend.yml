@@ -83,9 +83,6 @@ jobs:
         echo "Source Path on Runner: ${{ steps.get_jar_name.outputs.JAR_FILE_PATH }}"
         echo "Root Source Path on Runner: ./${{ steps.get_jar_name.outputs.JAR_FILE_NAME }}"
         echo "Target Directory on Server: /home/${{ secrets.SSH_USERNAME }}/${{ github.event.repository.name }}/backend"
-        echo "--- Checking if source file exists on Runner ---"
-        ls -la ${{ steps.get_jar_name.outputs.JAR_FILE_PATH }}
-        ls -la ./${{ steps.get_jar_name.outputs.JAR_FILE_NAME }}
 
     # 전송 경로 문제를 해결하기 위해 프로젝트 루트로 JAR 파일 복사
     # scp source에  ${{ steps.get_jar_name.outputs.JAR_FILE_PATH }} 사용시
