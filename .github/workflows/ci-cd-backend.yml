@@ -1,0 +1,112 @@
+name: Backend CI/CD
+
+on:
+  push:
+    branches:
+      - main # main 브랜치에 푸시될(코드 변화) 때 트리거
+    paths:
+      - 'backend/**' # backend 디렉토리 내의 파일 변경 시 트리거
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest # GitHub Actions에서 제공하는 최신 Ubuntu 환경 사용
+    # 사용 가능한 runner 환경 https://docs.github.com/en/actions/how-tos/writing-workflows/choosing-where-your-workflow-runs/choosing-the-runner-for-a-job
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4 # 레포지토리 코드 가져오기
+
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin' # OpenJDK 배포판
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x backend/gradlew # gradlew 실행 권한 부여
+
+    - name: Build with Gradle
+      run: ./gradlew bootJar # 루트 디렉토리에서 bootJar 태스크 실행
+      working-directory: ./backend # backend 디렉토리로 이동하여 명령어 실행
+
+    - name: Get JAR file name
+      id: get_jar_name
+      run: |
+        JAR_FILE=$(find ./backend/build/libs -name "*.jar" ! -name "*plain.jar" | head -n 1)
+        echo "JAR_FILE_PATH=${JAR_FILE}" >> $GITHUB_OUTPUT
+        echo "JAR_FILE_NAME=$(basename ${JAR_FILE})" >> $GITHUB_OUTPUT
+      # 빌드된 JAR 파일의 경로와 이름을 추출하여 다음 스텝에서 사용
+
+    - name: Deploy to Ubuntu Server
+      uses: appleboy/ssh-action@master # SSH를 통해 원격 서버에 명령 실행 및 파일 전송
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        port: ${{ secrets.SSH_PORT }}
+        username: ${{ secrets.SSH_USERNAME }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        passphrase: ${{ secrets.SSH_PASSPHRASE }}
+        script: |
+          # 서버에 배포될 경로 설정
+          REMOTE_APP_DIR="/home/${{ secrets.SSH_USERNAME }}/${{ github.event.repository.name }}/backend"
+          REMOTE_JAR_PATH="${REMOTE_APP_DIR}/${{ steps.get_jar_name.outputs.JAR_FILE_NAME }}"
+          
+          echo "Deploying to ${REMOTE_JAR_PATH}"
+          
+          # 원격 디렉토리 생성 (없을 경우)
+          mkdir -p "${REMOTE_APP_DIR}"
+          
+          # 8080 포트를 사용하는 프로세스 종료
+          # lsof 명령어를 사용하여 8080 포트를 점유하고 있는 프로세스의 PID를 찾습니다.
+          PID=$(lsof -t -i:8080 || true)
+          if [ -n "$PID" ]; then
+            echo "Killing process with PID: $PID that is using port 8080"
+            kill -9 $PID
+            sleep 5 # 프로세스 종료 대기
+          else
+            echo "No process found using port 8080."
+          fi
+          
+          # 이전 JAR 파일 삭제 (선택 사항이지만 권장)
+          rm -f "${REMOTE_APP_DIR}/*.jar"
+          
+          # 빌드된 JAR 파일 전송 (SCP)
+          # GitHub Actions runner에서 빌드된 JAR 파일을 Ubuntu 서버로 전송
+          # 'source'는 GitHub Actions runner 내의 경로, 'target'은 Ubuntu 서버 내의 경로
+          # appleboy/ssh-action의 'script' 블록 안에서는 SCP를 직접 사용하기 어렵습니다.
+          # 대신 'scp_source'와 'scp_target'을 사용하거나, 'rsync'를 사용하는 것이 좋습니다.
+          # 여기서는 'scp_source'와 'scp_target'을 사용하여 파일 전송을 분리합니다.
+          # 이 부분은 다음 스텝에서 별도의 'appleboy/scp-action'으로 분리하는 것이 더 일반적입니다.
+          # 일단은 편의상 스크립트 내에서 직접 전송하는 방식은 제외하고,
+          # 다음 스텝에서 scp-action을 추가하는 것으로 안내하겠습니다.
+          
+          # 파일 전송은 다음 스텝에서 scp-action을 사용하여 진행합니다.
+          # 이 스크립트는 기존 프로세스 종료 및 디렉토리 생성만 담당합니다.
+          echo "Preparation on remote server complete."
+
+    - name: Transfer JAR file to Ubuntu Server
+      uses: appleboy/scp-action@master # SCP를 통해 파일 전송
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        port: ${{ secrets.SSH_PORT }}
+        username: ${{ secrets.SSH_USERNAME }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        passphrase: ${{ secrets.SSH_PASSPHRASE }}
+        source: ${{ steps.get_jar_name.outputs.JAR_FILE_PATH }} # GitHub Actions runner의 JAR 파일 경로
+        target: /home/${{ secrets.SSH_USERNAME }}/${{ github.event.repository.name }}/backend # Ubuntu 서버의 대상 디렉토리
+
+    - name: Run Spring Boot Application
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        port: ${{ secrets.SSH_PORT }}
+        username: ${{ secrets.SSH_USERNAME }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        passphrase: ${{ secrets.SSH_PASSPHRASE }}
+        script: |
+          REMOTE_APP_DIR="/home/${{ secrets.SSH_USERNAME }}/${{ github.event.repository.name }}/backend"
+          JAR_FILE_NAME="${{ steps.get_jar_name.outputs.JAR_FILE_NAME }}"
+          
+          # nohup으로 백그라운드 실행
+          echo "Starting new application: ${JAR_FILE_NAME}"
+          nohup java -jar "${REMOTE_APP_DIR}/${JAR_FILE_NAME}" > "${REMOTE_APP_DIR}/application.log" 2>&1 &
+          echo "Application started."
